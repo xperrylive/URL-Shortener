@@ -8,8 +8,8 @@ DELETE /api/auth/logout    → Clear refresh cookie (requires valid access token
 """
 import uuid
 
+import bcrypt
 from fastapi import APIRouter, Cookie, HTTPException, Response, status
-from passlib.context import CryptContext
 from sqlalchemy import select
 
 from app.config import settings
@@ -20,17 +20,16 @@ from app.utils.jwt import create_access_token, create_refresh_token, get_subject
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-# ── Password hashing ──────────────────────────────────────────────────────────
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# ── Password hashing (direct bcrypt — compatible with bcrypt 5.x / Python 3.13) ──
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    """Hash a plaintext password using bcrypt."""
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify a plaintext password against a bcrypt hash."""
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 # ── Cookie helper ─────────────────────────────────────────────────────────────

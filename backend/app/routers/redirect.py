@@ -30,9 +30,15 @@ router = APIRouter(tags=["Redirect"])
 
 # ── Background Task ───────────────────────────────────────────────────────────
 
-async def _log_click(short_code: str) -> None:
-    """Increment click_count for the given short_code (MVP synchronous approach)."""
-    async with async_session() as session:
+async def _log_click(short_code: str, session_factory=None) -> None:
+    """Increment click_count for the given short_code.
+
+    Accepts an optional session_factory override so tests can substitute
+    the SQLite test engine instead of the real PostgreSQL engine.
+    """
+    from app.database import async_session as default_factory
+    factory = session_factory or default_factory
+    async with factory() as session:
         await session.execute(
             update(URL)
             .where(URL.short_code == short_code)
@@ -85,12 +91,20 @@ async def redirect(
             detail="This link is no longer active.",
         )
 
-    if url_obj.expires_at is not None and url_obj.expires_at < datetime.now(timezone.utc):
-        await set_inactive_cache(redis, short_code)
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="This link has expired.",
-        )
+    if url_obj.expires_at is not None:
+        # Handle both timezone-aware (PostgreSQL) and naive (SQLite in tests) datetimes
+        expires = url_obj.expires_at
+        now = datetime.now(timezone.utc)
+        if expires.tzinfo is None:
+            # SQLite returns naive datetimes — treat stored value as UTC
+            from datetime import timezone as _tz
+            expires = expires.replace(tzinfo=_tz.utc)
+        if expires < now:
+            await set_inactive_cache(redis, short_code)
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="This link has expired.",
+            )
 
     # ── 3. Populate cache & redirect ───────────────────────────────
     await set_cached_url(redis, short_code, url_obj.original_url)

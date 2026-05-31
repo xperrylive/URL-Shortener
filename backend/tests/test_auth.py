@@ -25,9 +25,11 @@ class TestRegister:
         assert data["user"]["tier"] == "free"
 
     async def test_register_duplicate_email(self, client: AsyncClient, registered_user: dict):
+        # Try to register again with the same email that was used for registered_user
+        email = registered_user["user"]["email"]
         resp = await client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "AnotherPass1"},
+            json={"email": email, "password": "AnotherPass1"},
         )
         assert resp.status_code == 409
 
@@ -56,9 +58,10 @@ class TestRegister:
 @pytest.mark.asyncio
 class TestLogin:
     async def test_login_success(self, client: AsyncClient, registered_user: dict):
+        email = registered_user["user"]["email"]
         resp = await client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "TestPass1"},
+            json={"email": email, "password": "TestPass1"},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -66,9 +69,10 @@ class TestLogin:
         assert data["token_type"] == "bearer"
 
     async def test_login_wrong_password(self, client: AsyncClient, registered_user: dict):
+        email = registered_user["user"]["email"]
         resp = await client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "WrongPass1"},
+            json={"email": email, "password": "WrongPass1"},
         )
         assert resp.status_code == 401
 
