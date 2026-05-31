@@ -17,11 +17,11 @@
 
 ## Current Status
 
-**Phase:** Setup Complete — Ready for Day 1 MVP Build
+**Phase:** Day 1 MVP Backend — COMPLETE ✅
 
-**Last Action:** Scaffolded full backend directory structure + committed to Git.
+**Last Action:** Implemented all Day 1 MVP backend features (auth, URL CRUD, redirect, tests).
 
-**Next Step:** Begin Day 1 MVP Backend implementation (see checklist below).
+**Next Step:** Day 2 — Frontend (Next.js landing page, register/login, dashboard) OR post-MVP backend features (GeoIP analytics, rate limiting, QR codes).
 
 ---
 
@@ -40,30 +40,36 @@
 - [x] Initialize Git repository
 - [x] Create `antigravity.md` scratchpad
 - [x] Scaffold backend directory structure
-- [ ] **Step 4:** Set up `requirements.txt` with all dependencies
-- [ ] **Step 5:** Write `app/config.py` (pydantic-settings, .env loading)
-- [ ] **Step 6:** Write `app/database.py` (async SQLAlchemy engine + session factory)
-- [ ] **Step 7:** Write SQLAlchemy models (`models/user.py`, `models/url.py`, `models/click.py`)
-- [ ] **Step 8:** Initialize Alembic + write first migration
-- [ ] **Step 9:** Write Pydantic schemas (`schemas/auth.py`, `schemas/url.py`, `schemas/analytics.py`)
-- [ ] **Step 10:** Write JWT utilities (`utils/jwt.py`)
-- [ ] **Step 11:** Write `dependencies.py` (`get_db`, `get_current_user`, `get_redis`)
-- [ ] **Step 12:** Implement auth router (`routers/auth.py`) — register, login, refresh, logout
-- [ ] **Step 13:** Implement URL shortener service (`services/shortener.py`) + URL router (`routers/urls.py`)
-- [ ] **Step 14:** Implement redirect router (`routers/redirect.py`) with Redis cache
-- [ ] **Step 15:** Implement click counter (synchronous increment for MVP)
-- [ ] **Step 16:** Implement list URLs endpoint
-- [ ] **Step 17:** Write `app/main.py` (app factory, router registration, CORS)
-- [ ] **Step 18:** Write `Dockerfile` + `docker-compose.yml`
-- [ ] **Step 19:** Write `.env.example`
-- [ ] **Step 20:** Write smoke tests (`tests/test_auth.py`, `tests/test_urls.py`, `tests/test_redirect.py`)
+- [x] **Step 4:** Set up `requirements.txt` with all dependencies
+- [x] **Step 5:** `app/config.py` — pydantic-settings, .env loading, CORS helper
+- [x] **Step 6:** `app/database.py` — async SQLAlchemy engine + session factory, DeclarativeBase
+- [x] **Step 7:** SQLAlchemy models (`models/user.py`, `models/url.py`, `models/click.py`)
+- [x] **Step 8:** Alembic initialized (`alembic.ini`, `alembic/env.py`, `alembic/script.py.mako`)
+- [x] **Step 9:** Pydantic schemas (`schemas/auth.py`, `schemas/url.py`, `schemas/analytics.py`)
+- [x] **Step 10:** JWT utilities (`utils/jwt.py`) + device parser (`utils/device_parser.py`)
+- [x] **Step 11:** `dependencies.py` — get_db, get_current_user, get_optional_user, get_redis
+- [x] **Step 12:** Auth router — register, login, refresh (cookie), logout
+- [x] **Step 13:** Shortener service (base62, collision check, alias validation) + URL router (CRUD)
+- [x] **Step 14:** Redirect router — Redis-first, negative caching, 410 for expired
+- [x] **Step 15:** Click counter — BackgroundTask (async increment via `update(URL)`)
+- [x] **Step 16:** List URLs endpoint — paginated, owner-scoped
+- [x] **Step 17:** `app/main.py` — lifespan startup checks, CORS, ordered router registration
+- [x] **Step 18:** `Dockerfile` + `docker-compose.yml` (FastAPI + Postgres 16 + Redis 7)
+- [x] **Step 19:** `.env.example` with all required env vars
+- [x] **Step 20:** Tests — `conftest.py` (SQLite + fakeredis), `test_auth.py`, `test_urls.py`, `test_redirect.py`
 
-### Frontend (After Backend MVP)
-- [ ] Landing page with URL input
+### Frontend (Next Phase)
+- [ ] Landing page with URL input → show shortened result
 - [ ] Register + Login pages
-- [ ] Dashboard URL table with copy button
-- [ ] Connect to live backend API
+- [ ] Dashboard URL table with copy button and click counts
+- [ ] Connect all pages to live backend API
 - [ ] Deploy to Vercel
+
+### Deployment (After Frontend)
+- [ ] Deploy backend to Railway
+- [ ] Point to Supabase DB + Redis Cloud
+- [ ] Run `alembic upgrade head` against production DB
+- [ ] Set all production env vars in Railway
 
 ---
 
@@ -145,6 +151,10 @@
 
 | Commit | Message |
 |---|---|
-| (pending) | `chore: initialize git repository` |
-| (pending) | `chore: add project scratchpad (antigravity.md)` |
-| (pending) | `feat: scaffold backend directory structure` |
+| 8303962 | `chore: initialize git repository with gitignore and README` |
+| 1223281 | `feat: scaffold backend directory structure per PRD section 9` |
+| 1dc11fc | `feat: implement config (pydantic-settings) and async database engine` |
+| 4d77ba9 | `feat: implement SQLAlchemy ORM models (User, URL, Click)` |
+| 83863d4 | `feat: implement Pydantic schemas, JWT utils, device parser, and Alembic migration setup` |
+| 090c511 | `feat: implement auth router, URL router, redirect router, and core services` |
+| (next)  | `test: add conftest, test_auth, test_urls, test_redirect` |
