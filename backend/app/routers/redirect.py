@@ -11,9 +11,11 @@ GET /{short_code}
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select, update
+
+from app.config import settings
 
 from app.database import async_session
 from app.dependencies import DBDep, RedisDep
@@ -72,7 +74,10 @@ async def redirect(
 
     if cached is not None:
         if is_inactive_sentinel(cached):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Short URL not found.")
+            return RedirectResponse(
+                url=f"{settings.frontend_url.rstrip('/')}/not-found",
+                status_code=status.HTTP_302_FOUND,
+            )
         background_tasks.add_task(_log_click, short_code)
         return RedirectResponse(url=cached, status_code=status.HTTP_301_MOVED_PERMANENTLY)
 
@@ -82,13 +87,16 @@ async def redirect(
 
     if url_obj is None:
         await set_inactive_cache(redis, short_code)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Short URL not found.")
+        return RedirectResponse(
+            url=f"{settings.frontend_url.rstrip('/')}/not-found",
+            status_code=status.HTTP_302_FOUND,
+        )
 
     if not url_obj.is_active:
         await set_inactive_cache(redis, short_code)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This link is no longer active.",
+        return RedirectResponse(
+            url=f"{settings.frontend_url.rstrip('/')}/not-found?reason=inactive",
+            status_code=status.HTTP_302_FOUND,
         )
 
     if url_obj.expires_at is not None:
@@ -101,9 +109,9 @@ async def redirect(
             expires = expires.replace(tzinfo=_tz.utc)
         if expires < now:
             await set_inactive_cache(redis, short_code)
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="This link has expired.",
+            return RedirectResponse(
+                url=f"{settings.frontend_url.rstrip('/')}/not-found?reason=expired",
+                status_code=status.HTTP_302_FOUND,
             )
 
     # ── 3. Populate cache & redirect ───────────────────────────────

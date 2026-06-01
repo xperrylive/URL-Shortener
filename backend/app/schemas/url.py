@@ -68,6 +68,8 @@ class URLResponse(BaseModel):
 class URLListResponse(BaseModel):
     items: list[URLResponse]
     total: int
+    total_active: int
+    total_clicks: int
     page: int
     page_size: int
     pages: int

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { urlsAPI, type ShortURL, APIError } from "@/lib/api";
 
 const FEATURES = [
@@ -48,6 +50,15 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
   const handleShorten = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
@@ -71,6 +82,10 @@ export default function HomePage() {
       setLoading(false);
     }
   };
+
+  if (authLoading || isAuthenticated) {
+    return null; // prevent flash of landing page while redirecting
+  }
 
   return (
     <div style={{ position: "relative", overflowX: "hidden" }}>

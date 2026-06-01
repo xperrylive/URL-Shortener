@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # ── Application ───────────────────────────────────────────────
     base_url: str = "http://localhost:8000"
+    frontend_url: str = "http://localhost:3000"
     environment: str = "development"
 
     # ── GeoIP ─────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import math
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.dependencies import CurrentUser, DBDep, OptionalUser, RedisDep
@@ -19,6 +19,7 @@ from app.models.url import URL
 from app.schemas.url import ShortenRequest, URLListResponse, URLResponse, UpdateURLRequest
 from app.services.cache import invalidate_url_cache
 from app.services.shortener import build_short_url, generate_short_code, validate_custom_alias
+from app.utils.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/api/urls", tags=["URLs"])
 
@@ -62,11 +63,20 @@ async def _get_owned_url(short_code: str, user_id: uuid.UUID, db) -> URL:
 )
 async def shorten_url(
     body: ShortenRequest,
+    request: Request,
     db: DBDep,
     redis: RedisDep,
     current_user: OptionalUser,
 ) -> URLResponse:
     """Create a short URL. Anonymous users may create links; authenticated users own them."""
+    
+    # Rate Limiting
+    if current_user is None:
+        client_ip = request.client.host if request.client else "unknown"
+        await check_rate_limit(redis, identifier=client_ip, is_anonymous=True)
+    elif current_user.tier != "pro":
+        await check_rate_limit(redis, identifier=str(current_user.id), is_anonymous=False)
+
     original_url = str(body.url)
 
     # Validate custom alias if provided
@@ -122,6 +132,18 @@ async def list_urls(
     )
     total = count_result.scalar_one()
 
+    # Active count
+    active_result = await db.execute(
+        select(func.count(URL.id)).where(URL.user_id == current_user.id, URL.is_active == True)
+    )
+    total_active = active_result.scalar_one()
+
+    # Total clicks
+    clicks_result = await db.execute(
+        select(func.sum(URL.click_count)).where(URL.user_id == current_user.id)
+    )
+    total_clicks = clicks_result.scalar_one() or 0
+
     # Paginated items
     items_result = await db.execute(
         select(URL)
@@ -135,6 +157,8 @@ async def list_urls(
     return URLListResponse(
         items=[_to_response(u) for u in urls],
         total=total,
+        total_active=total_active,
+        total_clicks=total_clicks,
         page=page,
         page_size=page_size,
         pages=math.ceil(total / page_size) if total > 0 else 1,

@@ -44,7 +44,7 @@ export default function Navbar() {
         }}
       >
         {/* Logo */}
-        <Link href="/" style={{ textDecoration: "none" }}>
+        <Link href={isAuthenticated ? "/dashboard" : "/"} style={{ textDecoration: "none" }}>
           <span
             style={{
               fontSize: "1.35rem",

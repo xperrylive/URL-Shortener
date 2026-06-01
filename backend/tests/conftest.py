@@ -53,10 +53,12 @@ try:
         return _fakeredis.FakeRedis(server=_fake_redis_server, decode_responses=True)
 
 except ImportError:
-    import redis.asyncio as aioredis
+    from app.dependencies import InMemoryRedis
+    
+    _test_redis = InMemoryRedis()
 
     async def _get_fake_redis():  # type: ignore[misc]
-        return aioredis.from_url("redis://localhost:6379", decode_responses=True)
+        return _test_redis
 
 
 # ── Dependency overrides ──────────────────────────────────────────────────────

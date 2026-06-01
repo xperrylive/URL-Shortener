@@ -116,6 +116,8 @@ export interface ShortURL {
 export interface URLListResponse {
   items: ShortURL[];
   total: number;
+  total_active: number;
+  total_clicks: number;
   page: number;
   page_size: number;
   pages: number;

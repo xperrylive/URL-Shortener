@@ -17,11 +17,11 @@
 
 ## Current Status
 
-**Phase:** Day 1 MVP Backend — COMPLETE ✅
+**Phase:** Day 2 MVP Frontend — COMPLETE ✅
 
-**Last Action:** Implemented all Day 1 MVP backend features (auth, URL CRUD, redirect, tests).
+**Last Action:** Built Next.js frontend, integrated with backend, added rate limiting, and implemented custom 404 redirect logic.
 
-**Next Step:** Day 2 — Frontend (Next.js landing page, register/login, dashboard) OR post-MVP backend features (GeoIP analytics, rate limiting, QR codes).
+**Next Step:** Deployment or remaining post-MVP features (GeoIP analytics, QR codes, analytics dashboard).
 
 ---
 
@@ -58,11 +58,11 @@
 - [x] **Step 19:** `.env.example` with all required env vars
 - [x] **Step 20:** Tests — `conftest.py` (SQLite + fakeredis), `test_auth.py`, `test_urls.py`, `test_redirect.py`
 
-### Frontend (Next Phase)
-- [ ] Landing page with URL input → show shortened result
-- [ ] Register + Login pages
-- [ ] Dashboard URL table with copy button and click counts
-- [ ] Connect all pages to live backend API
+### Frontend (Priority Order)
+- [x] Landing page with URL input → show shortened result
+- [x] Register + Login pages
+- [x] Dashboard URL table with copy button and click counts
+- [x] Connect all pages to live backend API
 - [ ] Deploy to Vercel
 
 ### Deployment (After Frontend)
@@ -75,12 +75,12 @@
 
 ## Post-MVP Roadmap (do not build yet)
 
-1. Custom aliases
-2. Async click logging (BackgroundTasks)
-3. GeoIP analytics
-4. Redis rate limiting
-5. Link expiration (TTL)
-6. Analytics dashboard (charts)
+1. [x] Custom aliases
+2. [x] Async click logging (BackgroundTasks)
+3. [ ] GeoIP analytics
+4. [x] Redis rate limiting
+5. [x] Link expiration (TTL)
+6. [ ] Analytics dashboard (charts)
 7. QR code generation
 8. API key auth
 9. Celery Beat nightly cleanup

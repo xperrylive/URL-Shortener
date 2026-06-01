@@ -67,6 +67,25 @@ class InMemoryRedis:
         else:
             self._expirations.pop(key, None)
 
+    async def incr(self, key: str) -> int:
+        if key in self._expirations and time.time() > self._expirations[key]:
+            self._data.pop(key, None)
+            self._expirations.pop(key, None)
+        
+        current = self._data.get(key, "0")
+        try:
+            val = int(current) + 1
+        except ValueError:
+            val = 1
+        self._data[key] = str(val)
+        return val
+
+    async def expire(self, key: str, time_seconds: int) -> bool:
+        if key in self._data:
+            self._expirations[key] = time.time() + time_seconds
+            return True
+        return False
+
     async def delete(self, key: str) -> None:
         self._data.pop(key, None)
         self._expirations.pop(key, None)

@@ -175,7 +175,7 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return null;
 
-  const totalClicks = data?.items.reduce((acc, u) => acc + u.click_count, 0) ?? 0;
+  const totalClicks = data?.total_clicks ?? 0;
 
   return (
     <div
@@ -224,7 +224,7 @@ export default function DashboardPage() {
         {[
           { label: "Total links", value: data?.total ?? 0, icon: "🔗" },
           { label: "Total clicks", value: totalClicks, icon: "👆" },
-          { label: "Active links", value: data?.items.filter((u) => u.is_active).length ?? 0, icon: "✅" },
+          { label: "Active links", value: data?.total_active ?? 0, icon: "✅" },
         ].map((stat) => (
           <div
             key={stat.label}

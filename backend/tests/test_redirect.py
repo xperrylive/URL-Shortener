@@ -33,7 +33,8 @@ class TestRedirect:
 
     async def test_redirect_not_found(self, client: AsyncClient):
         resp = await client.get("/doesnotexist99", follow_redirects=False)
-        assert resp.status_code == 404
+        assert resp.status_code == 302
+        assert "/not-found" in resp.headers["location"]
 
     async def test_redirect_inactive(self, client: AsyncClient, auth_headers: dict):
         data = await _create_url(client, auth_headers)
@@ -43,7 +44,8 @@ class TestRedirect:
         await client.delete(f"/api/urls/{short_code}", headers=auth_headers)
 
         resp = await client.get(f"/{short_code}", follow_redirects=False)
-        assert resp.status_code == 404
+        assert resp.status_code == 302
+        assert "/not-found?reason=inactive" in resp.headers["location"]
 
     async def test_redirect_expired(self, client: AsyncClient, auth_headers: dict):
         past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -51,7 +53,8 @@ class TestRedirect:
         short_code = data["short_code"]
 
         resp = await client.get(f"/{short_code}", follow_redirects=False)
-        assert resp.status_code == 410
+        assert resp.status_code == 302
+        assert "/not-found?reason=expired" in resp.headers["location"]
 
     async def test_click_count_incremented(self, client: AsyncClient, auth_headers: dict):
         data = await _create_url(client, auth_headers)
