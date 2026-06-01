@@ -4,11 +4,11 @@
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 
-# ─────────────────────────────────────────────────
-# Database — SQLAlchemy 2.0 async + asyncpg driver
+# Database — SQLAlchemy 2.0 async + drivers
 # ─────────────────────────────────────────────────
 sqlalchemy[asyncio]==2.0.30
-asyncpg==0.29.0
+asyncpg>=0.30.0
+aiosqlite>=0.20.0
 alembic==1.13.1
 
 # ─────────────────────────────────────────────────
