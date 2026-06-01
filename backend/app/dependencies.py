@@ -39,23 +39,79 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 DBDep = Annotated[AsyncSession, Depends(get_db)]
 
 # ── Redis Client ──────────────────────────────────────────────────────────────
+import logging
+import time
 
-_redis_pool: aioredis.Redis | None = None
+logger = logging.getLogger(__name__)
 
 
-async def get_redis() -> aioredis.Redis:
-    """Return the shared Redis connection pool (lazy initialised)."""
+class InMemoryRedis:
+    """An in-memory fallback for Redis that implements the subset of commands used in the app."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, str] = {}
+        self._expirations: dict[str, float] = {}
+
+    async def get(self, key: str) -> str | None:
+        if key in self._expirations:
+            if time.time() > self._expirations[key]:
+                self._data.pop(key, None)
+                self._expirations.pop(key, None)
+                return None
+        return self._data.get(key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._data[key] = value
+        if ex is not None:
+            self._expirations[key] = time.time() + ex
+        else:
+            self._expirations.pop(key, None)
+
+    async def delete(self, key: str) -> None:
+        self._data.pop(key, None)
+        self._expirations.pop(key, None)
+
+    async def ping(self) -> bool:
+        return True
+
+    async def aclose(self) -> None:
+        pass
+
+
+_redis_pool: aioredis.Redis | InMemoryRedis | None = None
+
+
+async def get_redis() -> aioredis.Redis | InMemoryRedis:
+    """Return the shared Redis connection pool (falls back to InMemoryRedis in dev if connection fails)."""
     global _redis_pool
     if _redis_pool is None:
-        _redis_pool = aioredis.from_url(
-            settings.redis_url,
-            encoding="utf-8",
-            decode_responses=True,
-        )
+        if settings.redis_url.lower() == "memory":
+            logger.info("Using in-memory Redis client (configured 'memory').")
+            _redis_pool = InMemoryRedis()
+        else:
+            try:
+                import asyncio
+                client = aioredis.from_url(
+                    settings.redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                )
+                # Quick timeout ping to verify server status
+                await asyncio.wait_for(client.ping(), timeout=1.0)
+                _redis_pool = client
+                logger.info("Successfully connected to Redis server.")
+            except Exception as e:
+                if settings.environment.lower() == "development":
+                    logger.warning(
+                        f"Redis connection failed ({e}). Falling back to in-memory Redis for development."
+                    )
+                    _redis_pool = InMemoryRedis()
+                else:
+                    raise
     return _redis_pool
 
 
-RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
+RedisDep = Annotated[aioredis.Redis | InMemoryRedis, Depends(get_redis)]
 
 # ── Auth: Bearer token extractor ──────────────────────────────────────────────
 

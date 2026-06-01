@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import settings
-from app.database import async_session, engine
+from app.database import Base, async_session, engine
 from app.routers import auth, urls, redirect as redirect_router
 
 
@@ -23,18 +23,24 @@ from app.routers import auth, urls, redirect as redirect_router
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Run startup checks, then yield (app runs), then cleanup on shutdown."""
     # ── Startup ───────────────────────────────────────────────────
+    # Auto-create tables for SQLite in development environment
+    if settings.environment.lower() == "development" and "sqlite" in settings.database_url:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
     # Verify database connectivity
     async with async_session() as session:
         await session.execute(text("SELECT 1"))
 
-    # Verify Redis connectivity
-    r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    # Verify Redis connectivity (using get_redis wrapper)
+    from app.dependencies import get_redis
+    r = await get_redis()
     await r.ping()
-    await r.aclose()
 
     yield  # Application is now running
 
     # ── Shutdown ──────────────────────────────────────────────────
+    # Clean up DB connections
     await engine.dispose()
 
 
