@@ -157,4 +157,4 @@
 | 4d77ba9 | `feat: implement SQLAlchemy ORM models (User, URL, Click)` |
 | 83863d4 | `feat: implement Pydantic schemas, JWT utils, device parser, and Alembic migration setup` |
 | 090c511 | `feat: implement auth router, URL router, redirect router, and core services` |
-| (next)  | `test: add conftest, test_auth, test_urls, test_redirect` |
+| d7539ac | `feat: add SQLite and InMemoryRedis fallback for local non-Docker development` |
