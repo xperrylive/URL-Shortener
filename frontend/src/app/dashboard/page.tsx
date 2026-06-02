@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { urlsAPI, type ShortURL, type URLListResponse, APIError } from "@/lib/api";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

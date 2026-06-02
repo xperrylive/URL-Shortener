@@ -5,7 +5,7 @@
  * - Throws APIError on non-2xx responses
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 export class APIError extends Error {
   constructor(
