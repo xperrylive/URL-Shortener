@@ -67,17 +67,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Health Check ──────────────────────────────────────────────
+    @app.get("/health", tags=["Health"], summary="Service health check")
+    async def health() -> dict:
+        return {"status": "ok", "environment": settings.environment}
+
     # ── Routers ───────────────────────────────────────────────────
     app.include_router(auth.router)
     app.include_router(urls.router)
     # Redirect router is included LAST — its /{short_code} catch-all
     # must not shadow any /api/* routes above it.
     app.include_router(redirect_router.router)
-
-    # ── Health Check ──────────────────────────────────────────────
-    @app.get("/health", tags=["Health"], summary="Service health check")
-    async def health() -> dict:
-        return {"status": "ok", "environment": settings.environment}
 
     return app
 
