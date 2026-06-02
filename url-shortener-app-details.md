@@ -5,15 +5,16 @@
 
 ## 1. Project Overview
 
-A full-stack URL shortening web application with real-time analytics, QR code generation, and a clean modern dashboard. The project is built as a portfolio piece targeting backend internship applications, demonstrating skills in async Python APIs, relational database design, caching, background task processing, and modern frontend development.
+A full-stack URL shortening web application with real-time analytics, QR code generation, and a clean modern dashboard. The project is built as a portfolio piece targeting backend internship applications, demonstrating skills in async Python APIs, relational database design, caching, background task processing, event-driven architecture (webhooks), and modern frontend development.
 
 **Target Users:** Developers, marketers, and general users who want to shorten URLs and track their performance.
 
 **Business Goals:**
 - Allow users to shorten long URLs into short, shareable links
-- Track click analytics per link (geography, device, referrer, time)
+- Track click analytics per link (geography, device, referrer, time) without blocking redirects
 - Provide a dashboard to manage and visualize link performance
 - Support link customization, expiration, and QR code generation
+- Allow enterprise-style event integrations via Webhooks
 
 ---
 
@@ -29,12 +30,12 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 | Migrations | Alembic |
 | Validation | Pydantic v2 |
 | Authentication | JWT via python-jose + passlib (bcrypt) |
-| Background Tasks | FastAPI BackgroundTasks (MVP), Celery Beat (later for scheduled jobs) |
+| Background Tasks | FastAPI BackgroundTasks (MVP), Celery (later for scheduled jobs & webhook retries) |
 | Caching | Redis (via aioredis) |
 | GeoIP | geoip2 + MaxMind GeoLite2 database |
 | QR Codes | qrcode[pil] library |
 | API Docs | Built-in Swagger UI + ReDoc (FastAPI default) |
-| Testing | pytest + pytest-asyncio + httpx |
+| Testing & Benchmarking | pytest, httpx, Locust (for load testing) |
 | Containerization | Docker + Docker Compose |
 
 ### Frontend
@@ -67,7 +68,6 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 | id | UUID | PRIMARY KEY, default gen_random_uuid() |
 | email | VARCHAR(255) | UNIQUE, NOT NULL |
 | password_hash | VARCHAR(255) | NOT NULL |
-| api_key | VARCHAR(64) | UNIQUE, nullable |
 | tier | ENUM('free', 'pro') | DEFAULT 'free' |
 | is_active | BOOLEAN | DEFAULT true |
 | created_at | TIMESTAMP | DEFAULT now() |
@@ -84,6 +84,7 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 | is_active | BOOLEAN | DEFAULT true |
 | expires_at | TIMESTAMP | nullable |
 | click_count | INTEGER | DEFAULT 0 |
+| webhook_url | TEXT | nullable (for firing events on click) |
 | created_at | TIMESTAMP | DEFAULT now() |
 | updated_at | TIMESTAMP | DEFAULT now() |
 
@@ -125,7 +126,7 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 | POST | `/api/urls/shorten` | Create a short URL | Optional |
 | GET | `/api/urls/` | List authenticated user's URLs (paginated) | Yes |
 | GET | `/api/urls/{short_code}` | Get URL details | Yes (owner) |
-| PATCH | `/api/urls/{short_code}` | Update alias or expiry | Yes (owner) |
+| PATCH | `/api/urls/{short_code}` | Update alias, expiry, or webhook | Yes (owner) |
 | DELETE | `/api/urls/{short_code}` | Deactivate a URL | Yes (owner) |
 
 ### Redirect — Root level
@@ -162,7 +163,7 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 - Custom alias: user-provided, validated as 3–30 chars, alphanumeric + hyphens only, no reserved words (e.g. "api", "dashboard", "admin")
 - Short codes are case-sensitive
 
-### Redirect Flow
+### Redirect Flow & Async Execution
 1. Request hits `GET /{short_code}`
 2. Check Redis cache for key `url:{short_code}` → if hit, get original URL
 3. If cache miss → query Postgres `urls` table by `short_code`
@@ -170,14 +171,15 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 5. If `expires_at` is set and past → return 410 Gone
 6. Cache the result in Redis with TTL of 3600 seconds
 7. Issue 301 redirect to original URL
-8. **Fire FastAPI BackgroundTask** to log the click asynchronously (non-blocking)
+8. **Fire FastAPI BackgroundTask** to handle analytics and webhooks asynchronously (non-blocking).
 
-### Click Logging (Background Task)
-1. Receive: `url_id`, `ip_address`, `user_agent`, `referrer` from request
+### Click Logging & Webhooks (Background Task)
+1. Receive: `url_id`, `ip_address`, `user_agent`, `referrer`, and `webhook_url` from request/DB
 2. Parse `user_agent` string to detect: `mobile`, `desktop`, `bot`
 3. Resolve `ip_address` → `country`, `city` using geoip2 + MaxMind GeoLite2
 4. Insert row into `clicks` table
 5. Increment `urls.click_count` counter
+6. If `webhook_url` exists, fire a POST request with click payload to the destination URL.
 
 ### Rate Limiting (Redis sliding window)
 - Key format: `ratelimit:shorten:{ip}` or `ratelimit:shorten:{user_id}`
@@ -205,7 +207,6 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 - **Password hashing:** bcrypt via passlib
 - **Access token:** JWT, 30-minute expiry
 - **Refresh token:** JWT, 7-day expiry, stored in httpOnly cookie
-- **API key auth (future):** Static key in `Authorization: Bearer <api_key>` header, stored hashed in DB
 - **CORS:** Configured to allow only the frontend Vercel domain in production
 - **Input validation:** All inputs validated via Pydantic v2 schemas, rejecting malformed URLs and oversized payloads
 - **SQL injection:** Fully prevented by SQLAlchemy ORM parameterized queries
@@ -247,11 +248,10 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 - **Donut chart:** Device type breakdown (mobile / desktop / bot)
 - **Table:** Top referrers (domain + count)
 - **QR Code section:** QR image displayed, download as PNG button
-- **Link settings:** Edit alias, set/change expiry date, deactivate link
+- **Link settings:** Edit alias, set/change expiry date, deactivate link, configure webhook URL
 
 ### Page: Settings `/settings`
 - Update email, update password
-- (Future) View/regenerate API key
 
 ### Global Components
 - `Navbar` — logo left, nav links, user avatar + logout right
@@ -278,104 +278,98 @@ A full-stack URL shortening web application with real-time analytics, QR code ge
 ## 9. Project File Structure
 
 ### Backend
-```
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                  ← FastAPI app, router registration, CORS
-│   ├── config.py                ← Settings via pydantic-settings (.env)
-│   ├── database.py              ← Async SQLAlchemy engine + session
-│   ├── dependencies.py          ← get_db, get_current_user, get_redis
-│   ├── models/
-│   │   ├── user.py
-│   │   ├── url.py
-│   │   └── click.py
-│   ├── schemas/
-│   │   ├── auth.py              ← Register/Login request + response schemas
-│   │   ├── url.py               ← ShortenRequest, URLResponse, UpdateURL
-│   │   └── analytics.py        ← Summary, TimeSeries, CountryStats, etc.
-│   ├── routers/
-│   │   ├── auth.py
-│   │   ├── urls.py
-│   │   ├── analytics.py
-│   │   ├── qr.py
-│   │   └── redirect.py          ← GET /{short_code}
-│   ├── services/
-│   │   ├── shortener.py         ← base62, collision check, alias validation
-│   │   ├── cache.py             ← Redis get/set/delete wrappers
-│   │   ├── analytics.py         ← Query aggregation logic
-│   │   └── geo.py               ← IP → country/city via geoip2
-│   ├── tasks/
-│   │   └── click_logger.py      ← Background task: parse UA, geoip, insert click
-│   └── utils/
-│       ├── rate_limiter.py      ← Redis sliding window rate limiter
-│       ├── jwt.py               ← Token creation + verification
-│       └── device_parser.py     ← User-agent → device type
-├── alembic/
-│   └── versions/                ← Migration files
-├── tests/
-│   ├── test_auth.py
-│   ├── test_urls.py
-│   ├── test_redirect.py
-│   └── test_analytics.py
-├── .env.example
-├── Dockerfile
-├── docker-compose.yml           ← FastAPI + Postgres + Redis for local dev
-└── requirements.txt
-```
+    backend/
+    ├── app/
+    │   ├── __init__.py
+    │   ├── main.py                  ← FastAPI app, router registration, CORS
+    │   ├── config.py                ← Settings via pydantic-settings (.env)
+    │   ├── database.py              ← Async SQLAlchemy engine + session
+    │   ├── dependencies.py          ← get_db, get_current_user, get_redis
+    │   ├── models/
+    │   │   ├── user.py
+    │   │   ├── url.py
+    │   │   └── click.py
+    │   ├── schemas/
+    │   │   ├── auth.py              ← Register/Login request + response schemas
+    │   │   ├── url.py               ← ShortenRequest, URLResponse, UpdateURL
+    │   │   └── analytics.py        ← Summary, TimeSeries, CountryStats, etc.
+    │   ├── routers/
+    │   │   ├── auth.py
+    │   │   ├── urls.py
+    │   │   ├── analytics.py
+    │   │   ├── qr.py
+    │   │   └── redirect.py          ← GET /{short_code}
+    │   ├── services/
+    │   │   ├── shortener.py         ← base62, collision check, alias validation
+    │   │   ├── cache.py             ← Redis get/set/delete wrappers
+    │   │   ├── analytics.py         ← Query aggregation logic
+    │   │   └── geo.py               ← IP → country/city via geoip2
+    │   ├── tasks/
+    │   │   ├── click_logger.py      ← Background task: parse UA, geoip, insert click
+    │   │   └── webhook_sender.py    ← Background task: send POST payload to registered hooks
+    │   └── utils/
+    │       ├── rate_limiter.py      ← Redis sliding window rate limiter
+    │       ├── jwt.py               ← Token creation + verification
+    │       └── device_parser.py     ← User-agent → device type
+    ├── alembic/
+    │   └── versions/                ← Migration files
+    ├── tests/
+    │   ├── test_auth.py
+    │   ├── test_urls.py
+    │   ├── test_redirect.py
+    │   ├── test_analytics.py
+    │   └── load_tests/              ← Locust scripts for performance benchmarking
+    ├── .env.example
+    ├── Dockerfile
+    ├── docker-compose.yml           ← FastAPI + Postgres + Redis for local dev
+    └── requirements.txt
 
 ### Frontend
-```
-frontend/
-├── app/
-│   ├── page.tsx                 ← Landing page
-│   ├── login/page.tsx
-│   ├── register/page.tsx
-│   ├── dashboard/
-│   │   ├── page.tsx             ← URL table
-│   │   └── [short_code]/page.tsx ← Analytics
-│   └── settings/page.tsx
-├── components/
-│   ├── ui/                      ← shadcn/ui components
-│   ├── charts/
-│   │   ├── ClicksOverTime.tsx   ← Recharts LineChart
-│   │   ├── CountryBar.tsx       ← Recharts BarChart
-│   │   └── DeviceDonut.tsx      ← Recharts PieChart
-│   ├── UrlTable.tsx
-│   ├── QRModal.tsx
-│   ├── SummaryCards.tsx
-│   └── Navbar.tsx
-├── lib/
-│   ├── api.ts                   ← Axios instance + all typed API calls
-│   └── auth.ts                  ← Token helpers
-├── store/
-│   └── authStore.ts             ← Zustand: user, token, login/logout actions
-├── types/
-│   └── index.ts                 ← Shared TypeScript interfaces
-└── .env.local.example
-```
+    frontend/
+    ├── app/
+    │   ├── page.tsx                 ← Landing page
+    │   ├── login/page.tsx
+    │   ├── register/page.tsx
+    │   ├── dashboard/
+    │   │   ├── page.tsx             ← URL table
+    │   │   └── [short_code]/page.tsx ← Analytics
+    │   └── settings/page.tsx
+    ├── components/
+    │   ├── ui/                      ← shadcn/ui components
+    │   ├── charts/
+    │   │   ├── ClicksOverTime.tsx   ← Recharts LineChart
+    │   │   ├── CountryBar.tsx       ← Recharts BarChart
+    │   │   └── DeviceDonut.tsx      ← Recharts PieChart
+    │   ├── UrlTable.tsx
+    │   ├── QRModal.tsx
+    │   ├── SummaryCards.tsx
+    │   └── Navbar.tsx
+    ├── lib/
+    │   ├── api.ts                   ← Axios instance + all typed API calls
+    │   └── auth.ts                  ← Token helpers
+    ├── store/
+    │   └── authStore.ts             ← Zustand: user, token, login/logout actions
+    ├── types/
+    │   └── index.ts                 ← Shared TypeScript interfaces
+    └── .env.local.example
 
 ---
 
 ## 10. Environment Variables
 
 ### Backend `.env`
-```
-DATABASE_URL=postgresql+asyncpg://postgres:<password>@db.<project>.supabase.co:5432/postgres
-REDIS_URL=redis://default:<password>@<host>:<port>
-SECRET_KEY=<random 32-byte hex>
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-BASE_URL=https://your-railway-app.up.railway.app
-GEOIP_DB_PATH=/app/GeoLite2-City.mmdb
-ENVIRONMENT=production
-```
+    DATABASE_URL=postgresql+asyncpg://postgres:<password>@db.<project>.supabase.co:5432/postgres
+    REDIS_URL=redis://default:<password>@<host>:<port>
+    SECRET_KEY=<random 32-byte hex>
+    ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=30
+    REFRESH_TOKEN_EXPIRE_DAYS=7
+    BASE_URL=https://your-railway-app.up.railway.app
+    GEOIP_DB_PATH=/app/GeoLite2-City.mmdb
+    ENVIRONMENT=production
 
 ### Frontend `.env.local`
-```
-NEXT_PUBLIC_API_URL=https://your-railway-app.up.railway.app
-```
+    NEXT_PUBLIC_API_URL=https://your-railway-app.up.railway.app
 
 ---
 
@@ -387,7 +381,7 @@ Build only these features end-to-end and get them fully working and deployed:
 - [ ] User registration + login (JWT, access + refresh token)
 - [ ] Shorten a URL (random 6-char short code)
 - [ ] Redirect via short code (with Redis cache)
-- [ ] Basic click counter (increment `urls.click_count` synchronously for MVP)
+- [ ] **Async click logging using FastAPI BackgroundTasks** (non-blocking from Day 1)
 - [ ] List authenticated user's URLs
 - [ ] Docker Compose for local dev (FastAPI + Postgres + Redis)
 - [ ] Deploy backend to Railway with Supabase DB + Redis Cloud
@@ -407,24 +401,24 @@ Add features one by one — each is a concrete talking point in interviews:
 
 | # | Feature | Skills Demonstrated |
 |---|---|---|
-| 1 | Custom aliases | Input validation, uniqueness constraints |
-| 2 | Async click logging via BackgroundTasks | Non-blocking I/O, task queues |
+| 1 | Load Testing & Benchmarking | Locust/Apache Bench to prove sub-10ms redirect latency. Documented in README. |
+| 2 | Custom aliases | Input validation, uniqueness constraints |
 | 3 | GeoIP analytics (country/city) | Third-party data enrichment |
 | 4 | Redis rate limiting | Sliding window algorithm, abuse prevention |
-| 5 | Link expiration (TTL) | Scheduled logic, HTTP status codes |
-| 6 | Analytics dashboard (charts) | Data aggregation, visualization |
-| 7 | QR code generation | Server-side image generation |
-| 8 | API key authentication | Auth patterns, programmatic access |
+| 5 | Webhooks Integration | Event-driven architecture, outward API communication |
+| 6 | Link expiration (TTL) | Scheduled logic, HTTP status codes |
+| 7 | Analytics dashboard (charts) | Data aggregation, visualization |
+| 8 | QR code generation | Server-side image generation |
 | 9 | Celery Beat for nightly cleanup | Distributed task scheduling |
-| 10 | GraphQL API (Strawberry) | Alternative API paradigm |
-| 11 | Prometheus + Grafana metrics | Observability, SRE fundamentals |
+| 10 | Prometheus + Grafana metrics | Observability, SRE fundamentals |
 
 ---
 
 ## 13. Resume Bullet Points (After Completion)
 
-- Built an async URL shortener API with FastAPI achieving sub-10ms redirect latency via Redis caching
-- Designed a relational schema in PostgreSQL with optimized indexes supporting time-series analytics queries across millions of clicks
-- Implemented non-blocking click tracking using FastAPI BackgroundTasks, decoupling analytics ingestion from the critical redirect path
-- Built a Redis sliding window rate limiter enforcing per-user and per-IP request quotas
-- Deployed a production full-stack application across Railway, Supabase, Redis Cloud, and Vercel using Docker and environment-based configuration
+- Built an async URL shortener API with FastAPI, achieving sub-10ms redirect latency verified via Locust load testing, leveraging Redis caching to minimize database reads.
+- Designed a relational schema in PostgreSQL with optimized indexes supporting time-series analytics queries across millions of clicks.
+- Implemented non-blocking click tracking and analytics parsing using FastAPI BackgroundTasks, decoupling data ingestion from the critical redirect path.
+- Engineered an event-driven Webhook system to automatically push real-time click data payloads to user-defined endpoints.
+- Built a Redis sliding window rate limiter enforcing per-user and per-IP request quotas to prevent system abuse.
+- Deployed a production full-stack application across Railway, Supabase, Redis Cloud, and Vercel using Docker and environment-based configuration.
