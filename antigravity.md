@@ -17,11 +17,11 @@
 
 ## Current Status
 
-**Phase:** Day 2 MVP Frontend — COMPLETE ✅
+**Phase:** Deployment Preparation — IN PROGRESS 🚀
 
-**Last Action:** Built Next.js frontend, integrated with backend, added rate limiting, and implemented custom 404 redirect logic.
+**Last Action:** Prepared CI/CD pipeline (GitHub Actions), production Dockerfile (multi-stage), railway.json, vercel.json, and updated env examples.
 
-**Next Step:** Deployment or remaining post-MVP features (GeoIP analytics, QR codes, analytics dashboard).
+**Next Step:** Push to GitHub, set repo secrets, trigger first deployment to Railway + Vercel.
 
 ---
 
@@ -65,11 +65,18 @@
 - [x] Connect all pages to live backend API
 - [ ] Deploy to Vercel
 
-### Deployment (After Frontend)
-- [ ] Deploy backend to Railway
-- [ ] Point to Supabase DB + Redis Cloud
-- [ ] Run `alembic upgrade head` against production DB
-- [ ] Set all production env vars in Railway
+### Deployment
+- [x] Production Dockerfile (multi-stage, non-root user)
+- [x] `railway.json` — Railway service config (auto-runs `alembic upgrade head` on deploy)
+- [x] `vercel.json` — Vercel project config
+- [x] GitHub Actions CI (`.github/workflows/ci.yml`) — pytest + Next.js build on every PR
+- [x] GitHub Actions CD (`.github/workflows/cd.yml`) — auto-deploy to Railway + Vercel on `main` merge
+- [ ] Push repo to GitHub
+- [ ] Set GitHub repo secrets (RAILWAY_TOKEN, VERCEL_TOKEN, etc.)
+- [ ] Set environment variables in Railway service
+- [ ] Set environment variables in Vercel project
+- [ ] Trigger first deploy & verify `/health` endpoint
+- [ ] Run `alembic upgrade head` against production DB (auto-runs via railway.json)
 
 ---
 
@@ -158,3 +165,5 @@
 | 83863d4 | `feat: implement Pydantic schemas, JWT utils, device parser, and Alembic migration setup` |
 | 090c511 | `feat: implement auth router, URL router, redirect router, and core services` |
 | d7539ac | `feat: add SQLite and InMemoryRedis fallback for local non-Docker development` |
+| 14d5999 | `feat: complete frontend MVP, implement rate limiting, and add custom 404 redirect handling` |
+| pending | `chore: prepare deployment — CI/CD pipeline, production Dockerfile, railway + vercel config` |

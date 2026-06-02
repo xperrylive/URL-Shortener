@@ -51,4 +51,9 @@ node_modules/
 out/
 frontend/.env.local
 
+# SQLite dev databases — never commit these
+*.db
+*.db-shm
+*.db-wal
+
 # Alembic doesn't ignore versions/ — migrations should be committed
